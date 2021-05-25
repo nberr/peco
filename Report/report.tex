@@ -1,0 +1,1676 @@
+\documentclass{article}
+% TODO: add tables/figures (before or after table of contents),
+%       center table of contents title
+%       finish title page
+
+% for formatting code
+\usepackage{listings}
+\usepackage{xcolor}
+\usepackage{amsmath}
+\usepackage{array}
+
+\newcommand{\code}[1]{\texttt{#1}}
+\definecolor{codegreen}{rgb}{0,0.6,0}
+\definecolor{codegray}{rgb}{0.5,0.5,0.5}
+\definecolor{codepurple}{rgb}{0.58,0,0.82}
+\definecolor{backcolour}{rgb}{0.95,0.95,0.92}
+
+\lstdefinestyle{mystyle}{
+    backgroundcolor=\color{backcolour},
+    commentstyle=\color{codegreen},
+    keywordstyle=\color{magenta},
+    numberstyle=\tiny\color{codegray},
+    stringstyle=\color{codepurple},
+    basicstyle=\ttfamily\footnotesize,
+    breakatwhitespace=false,
+    breaklines=true,
+    captionpos=b,
+    keepspaces=true,
+    %numbers=left,
+    numbersep=5pt,
+    showspaces=false,
+    showstringspaces=false,
+    showtabs=false,
+    tabsize=2
+}
+
+\lstset{style=mystyle}
+
+\usepackage{biblatex}
+\usepackage{graphicx}
+\graphicspath{{./}}
+
+% for generating title page
+\title{Assessment 1}
+\author{Nicholas Berriochoa}
+
+% removes numbering from sections/table of contents
+\setcounter{secnumdepth}{0}
+
+% start the document
+\begin{document}
+
+% generate the title page and remove the page number
+\begin{titlepage} % Suppresses displaying the page number on the title page and the subsequent page counts as page 1
+	\newcommand{\HRule}{\rule{\linewidth}{0.5mm}} % Defines a new command for horizontal lines, change thickness here
+
+	\center % Centre everything on the page
+
+	%------------------------------------------------
+	%	Headings
+	%------------------------------------------------
+
+	\textsc{\LARGE University of West London}\\[1.5cm] % Main heading such as the name of your university/college
+
+	\textsc{\Large MSc Digital Audio Engineering}\\[0.5cm] % Major heading such as course name
+
+	\textsc{\large }\\[0.5cm] % Minor heading such as course title
+
+	%------------------------------------------------
+	%	Title
+	%------------------------------------------------
+
+	\HRule\\[0.4cm]
+
+	{\huge\bfseries Audio Programming 2 Assessment 1: Distortion Plugin}\\[0.4cm] % Title of your document
+
+	\HRule\\[1.5cm]
+
+	%------------------------------------------------
+	%	Author(s)
+	%------------------------------------------------
+
+	\begin{minipage}{0.4\textwidth}
+		\begin{flushleft}
+			\large
+			\textit{Author}\\
+			Nicholas
+
+      \textsc{Berriochoa} % Your name
+
+      Student ID: 21437804
+		\end{flushleft}
+	\end{minipage}
+	~
+	\begin{minipage}{0.4\textwidth}
+		\begin{flushright}
+			\large
+			\textit{Supervisor}\\
+			Dr. Stephen
+
+			\textsc{Oxnard} % Supervisor's name
+		\end{flushright}
+	\end{minipage}
+
+	% If you don't want a supervisor, uncomment the two lines below and comment the code above
+	%{\large\textit{Author}}\\
+	%John \textsc{Smith} % Your name
+
+	%------------------------------------------------
+	%	Date
+	%------------------------------------------------
+
+	\vfill\vfill\vfill % Position the date 3/4 down the remaining page
+
+	{\large\today} % Date, change the \today to a set date if you want to be precise
+
+	%------------------------------------------------
+	%	Logo
+	%------------------------------------------------
+
+	%\vfill\vfill
+	%\includegraphics[width=0.2\textwidth]{placeholder.jpg}\\[1cm] % Include a department/university logo - this will require the graphicx package
+
+	%----------------------------------------------------------------------------------------
+
+	\vfill % Push the date up 1/4 of the remaining page
+
+\end{titlepage}
+\newpage
+
+% start roman numeral pages for "pre" pages
+\pagenumbering{roman}
+\clearpage
+
+\tableofcontents
+\pagebreak
+\listoffigures
+
+\clearpage
+
+\pagenumbering{arabic}
+\section{Introduction}
+The objective of the assessment is to create a simple distortion plugin using JUCE.
+The plugin should implement at least one type of distortion and have at least three
+distortion blocks; two in parallel and two in series. The plugin design is memoryless
+and operates on a sample by sample basis. The main modifications made to the original
+design is the inclusion of multiple distortion types and allowing the user to set the
+type of distortion for each block. Doing so provides the user more control on the overall
+behavior of the output signal.
+
+\section{Development}
+JUCE plugins are broken down into two components; the Graphical User Interface (GUI)
+and the backend audio processing portion. The main focus of this assessment puts emphasis on
+the audio processing over the GUI. Although there is a lot to be said about User Interface/User Experience design decisions, these details will be left out because the assessment is focused on audio
+processing.
+
+The first step is to define the block diagram for the plugin. Some system needs to be
+defined in order to implement it. Following the specifications from the brief, the plugin has a total
+of three distortion blocks with two in parallel and two in series. After defining the behavior
+via the block diagram, a MATLAB prototype can be made.
+
+\begin{figure}[h]
+\centerline{\includegraphics[scale=0.35]{blockdiagram}}
+\caption{block diagram for the plugin}
+\end{figure}
+
+\pagebreak
+\subsection{Prototyping}
+The first step of developing a plugin is to model the plugin in MATLAB.
+Doing so makes testing the plugin easy since the resulting plugin can be compared
+to the output from MATLAB. In order to further verify correctness, plotting
+the distortion algorithms allows the user to view the behavior with a given input signal.
+
+The prototype starts by creating a simple sine wave to test the
+algorithm. User controls are defined to static values but can, and will be changed
+during testing. Each stage of distortion is stored in a unique array to allow each
+stage to be graphed for further verification. The \lstinline{C++} version does
+not include these extra arrays because the JUCE plugin does not plot each distortion
+stage.
+
+\begin{lstlisting}[language=MATLAB]
+% params
+Fs = 48000;         % sampling rate (Hz)
+T = 1/Fs;           % sampling period (s)
+L  = 10;            % simulation length (s)
+N = L * Fs;         % number of samples
+
+% input array sine wave
+t = 0:2*pi/(N-1):2*pi;
+x = sin(t);
+x = x';
+
+% user controls
+% these will be changed later for testing
+d1control1 = 1.6;
+d1control2 = 1.3;
+
+d2control = 1.8;
+
+output_gain = 1;
+
+% distortion stages
+% these are extra arrays used to graph each stage of distortion
+stage11 = zeros(N, 1);
+stage12 = zeros(N, 1);
+
+stage2 = zeros(N, 1);
+\end{lstlisting}
+
+The prototype continues on by defining the main time loop which allows the program to
+manipulate the input signal on a sample by sample basis. MATLAB has support to
+modify the entire signal, but working on a sample by sample basis allows parallels
+to be drawn between the MATLAB code and the JUCE code. Notice that the main time loop
+calls different functions. These functions are the implementations of the different distortion
+types. The main time loop could have contained these implementations as well, but defining them
+as separate functions proved to be beneficial later during testing. These functions are defined
+at the bottom of the MATLAB file as required. The three distortion types are hard limit, sine fold over,
+and sign wrap around. Notice again how the main time loop takes advantage of the extra
+storage for each distortion stage.
+\begin{lstlisting}[language=MATLAB]
+% main time loop
+for n = 1:N
+  % for each distortion block
+  % 1. apply the user control (drive)
+  % 2. feed value into the appropriate function
+
+  % start cascade
+  % d1 hard limiter
+  stage11(n) = sine_foldover(x(n) * d1control1);
+
+  % note passing stage11(n) rather than x(n)
+  stage12(n) = hard_limit(stage11(n) * d1control2);
+  % end cascade
+
+  % start parallel
+  % d2 sine foldover
+  stage2(n) = sine_foldover(x(n) * d2control);
+  % end parallel
+
+  % average the signals and apply user controlled output gain
+  y(n) = ((stage12(n) + stage2(n)) / 2) * output_gain;
+end
+\end{lstlisting}
+
+For each sample from the input, the original value is passed to two distortion blocks;
+the D11 block and the D2 block. This occurs because these blocks are in parallel so they
+receive the original input value. This value is then adjusted by the user controls that pair with
+the appropriate distortion block. Next, the D11 block passes it's value to the D12 block. This occurs
+because these blocks are in series, meaning blocks further down the line will receive a modified
+value.
+\pagebreak
+\subsubsection{Distortion Types}
+In order to cultivate interesting sounds, three total distortion types were included. Each type
+is tested by inputting an amplified sine wave to ensure parts of the signal get distorted. In all
+of the following figures, the blue signal is the original amplified sine wave, while the orange signal
+is the resulting output.
+The first type is hard clipping. This effect was originally created on analog circuits by pushing
+a transistor to it's maximum amplitude (hack audio, 2020). Since the transistor cannot output a level higher than
+it's intended use, the signal is clipped or limited to a certain threshold value.
+Implementing this through software is as simple as follows. This solution is a condensed
+version of if-else statements but results in the same outcome.
+
+\begin{lstlisting}[language=MATLAB]
+function output = hard_limit(input)
+    output = min(max(input, -1), 1);
+end
+\end{lstlisting}
+
+\begin{figure}[ht]
+\centerline{\includegraphics[width=\textwidth]{hard_limit}}
+\caption{hard limit distortion with amplified signal}
+\end{figure}
+\pagebreak
+The next type of distortion is what is known as soft clipping. Compared to hard clipping,
+soft clipping is a type of distortion effect where the amplitude of a signal is saturated along a smooth curve (hack audio, 2020).
+The effect is immediately apparent when viewing it's output graph. The resulting
+signal is much more smooth and rounded compared to hard clipping. It should also be noted that there
+are mutliple ways of achieving this effect. The sine foldover method was chosen because of it's ease
+of implementation.
+
+\begin{lstlisting}[language=MATLAB]
+function output = sine_foldover(input)
+    output = sin(input);
+end
+\end{lstlisting}
+
+\begin{figure}[ht]
+\centerline{\includegraphics[width=\textwidth]{sine_foldover}}
+\caption{sine foldover distortion with amplified signal}
+\end{figure}
+\pagebreak
+The final type implemented is known as sign wrap around. Any value outside of a certain
+threshold is wrapped around to the other side. This function takes advantage of the modulo operator
+in order to achieve this effect. Referencing the graph makes it clear that the effect is present and
+working as intended. Notice the parts of the sine wave cut off and positioned on the other side of the
+signal.
+\begin{lstlisting}[language=MATLAB]
+function output = sign_wraparound(input)
+    output = mod(input + 1, 2) - 1;
+end
+\end{lstlisting}
+\begin{figure}[ht]
+\centerline{\includegraphics[width=\textwidth]{sign_wraparound}}
+\caption{sign wraparound distortion with amplified signal}
+\end{figure}
+
+\pagebreak
+\subsection{Parameters}
+The first step after prototyping in MATLAB is to set up a way for the user to control
+the plugin. In order to accomplish this, the program needs parameters and controllers
+to adjust the parameters in real time. JUCE allows users to add parameters with the
+\lstinline{addParameter} function. Alternatively, you can add parameters programmatically
+with minimal additions. This process occurs in the \lstinline{createParameterLayout} function
+and uses some definitions define in the \lstinline{ModistParameters.h} file.
+
+\begin{lstlisting}[language=C++]
+//==============================================================================
+// Intialize the parameters
+juce::AudioProcessorValueTreeState::ParameterLayout ModistAudioProcessor::createParameterLayout()
+{
+  juce::AudioProcessorValueTreeState::ParameterLayout params;
+
+  for (int i = 0; i < MP_TotalNumParameters; i++) {
+
+      switch(ModistParameterTypes[i]) {
+          case is_int:
+              params.add(std::make_unique<juce::AudioParameterInt>(ModistParameterID[i],
+                                                                   ModistParameterID[i],
+                                                                   ModistParameterMin[i],
+                                                                   ModistParameterMax[i],
+                                                                   ModistParameterDefault[i],
+                                                                   ModistParameterID[i]));
+
+              break;
+          case is_float:
+              params.add(std::make_unique<juce::AudioParameterFloat>(ModistParameterID[i],
+                                                                     ModistParameterID[i],
+                                                                     juce::NormalisableRange<float>(ModistParameterMin[i], ModistParameterMax[i]),
+                                                                     ModistParameterDefault[i],
+                                                                     ModistParameterID[i]));
+
+              break;
+      }
+  }
+
+  return params;
+}
+
+\end{lstlisting}
+
+Each distortion block has two parameters; a distortion type and control.
+The type is simply which function gets called in the process block. The control
+amplifies the signal so more of the signal becomes distorted when running through
+the algorithm. In simple terms, it is an amplification parameter. Each parameter is linked through
+a controller and presented to the user through the GUI. The layout of the
+GUI directly models the signal flow diagram to give the user an accurate depiction
+of what the plugin accomplishes.
+
+\begin{figure}[ht]
+\centerline{\includegraphics[width=\textwidth]{plugin}}
+\caption{plugin UI}
+\end{figure}
+\pagebreak
+
+\subsection{Process Block}
+The bulk of the program occurs in the \lstinline{processBlock} function located
+in the \lstinline{PluginProcessor.cpp} file. The function directly mirrors the
+MATLAB implementation to ensure the process behaves the same way. This function also
+operates on a sample by sample basis. The main difference
+is the JUCE implementation fetches the value set by the user through the sliders. Additionally, the
+type of distortion applied is able to change depending on an additional parameter.
+
+\begin{lstlisting}[language=C++]
+void ModistAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midiMessages)
+{
+  int numSamples = buffer.getNumSamples();
+  if (numSamples == 0) {
+      return; // no audio to process
+  }
+
+  int numOutputs = getTotalNumOutputChannels();
+  auto channelDataL = buffer.getWritePointer(0);
+  auto channelDataR = (numOutputs == 2) ? buffer.getWritePointer(1) : buffer.getWritePointer(0);
+
+  for (int n = 0; n < numSamples; n++) {
+      float currSample = buffer.getSample(0, n);
+
+      float stage11 = distType[(int)D1Choice1->get()](currSample * D1Control1->get());
+
+      float stage12 = distType[(int)D1Choice2->get()](stage11 * D1Control2->get());
+
+      float stage2 = distType[(int)D2Choice->get()](currSample * D2Control->get());
+
+      channelDataL[n] = ((stage12 + stage2) / 2.0f) * outputGain->get();
+
+      if (numOutputs == 2) {
+          channelDataR[n] = channelDataL[n];
+      }
+  }
+
+}
+\end{lstlisting}
+
+\subsection{Distortion Functions}
+\lstinline{distType}
+is a function pointer that stores all of the distortion functions.
+Each function has a similar header; \lstinline{float functionName(float sample)}.
+This allows the functions to be stored in an array of function pointers. This design
+choice was made to allow the user to choose the distortion they would like to apply for
+each block. Using a function pointer paired with a parameter gives the program easy access
+to swap between the functions. The implementation is located in the \lstinline{DistortionTypes.h}
+file.
+
+
+\section{Testing}
+There are two stages of testing that need to be carried out. The first being MATLAB
+on it's own. The distortion algorithms implemented need to be tested to verify that
+they are behaving in a predictable manner. As stated before, each type of distortion is
+tested with an amplified sine wave. Figures 2, 3, and 4 show the original amplified
+sine wave and the output of each distortion. In order to test the main time loop, the
+outputs of each distortion stage are stored. At the end of the prototype, each stage is
+grpahed to show how the signal behaves for each part.
+\begin{figure}[ht]
+\centerline{\includegraphics[scale=0.4]{d12}}
+\caption{Example of distortion block D12 graph}
+\end{figure}
+\begin{figure}[ht]
+\centerline{\includegraphics[scale=0.4]{output}}
+\caption{Example of output graph}
+\end{figure}
+
+The second stage of testing is testing the output of MATLAB and compare it to the
+output of the plugin. Some additional files were created to help with the testing
+process. The code at the top of the \lstinline{DistortionPrototype.m} is repurposed
+to create an audio file for testing purposes.
+
+\begin{lstlisting}[language=MATLAB]
+%
+% This file generates a simple .wav file for testing purposes
+%
+
+clear;
+close all;
+
+Fs = 48000;                         % sampling rate
+T = 1/Fs;                           % sampling period
+L = 5;                              % length (in seconds)
+f0 = 440;                           % tone to generate
+x = sin(2*pi*f0*[0:T:5-T]);         % generate the sine wave
+audiowrite("TestAudio.wav", x, Fs); % create the audio file
+
+\end{lstlisting}
+
+This .wav file is used for all of the following tests. The rest of the code from the prototype did not go
+to waste. The \lstinline{DistortionTest.m} file contains the \lstinline{DistortionTest} function
+which contains the main time loop from the original prototype. This function also takes in some addition arguments
+such as the user controls and distortion algorithms. MATLAB and C++ both support passing functions
+as arguments. The d11, d12, and d2 are all function pointers. The equivalent C++ code handles this by
+using a simple integer parameter provided by the user. The tests were crafted using a random number generator to set the user controls.
+
+\begin{lstlisting}[language=MATLAB]
+% Example test case
+[x, Fs] = audioread("TestAudio.wav");
+
+y = DistortionTest(x, @sine_foldover, @hard_limit, @sine_foldover, 20.5, 18.1, 14.6, 0.8);
+audiowrite("MatlabTest1.wav", y, Fs);
+
+function y = DistortionTest(x, d11, d12, d2, d1control1, d1control2, d2control, outputgain)
+    N = length(x);
+
+    % the following code has been copied from DistortionPrototype.m
+    % with slight modifications such as removing graphing elements
+
+    % output array y(n)
+    y = zeros(N, 1);
+
+    % main time loop
+    for n = 1:N
+        % for each distortion block
+        % 1. apply the user control (drive)
+        % 2. feed value into the appropriate function
+
+        stage11 = d11(d1control1 * x(n));
+        stage12 = d12(d1control2 * stage11);
+
+        stage2 = d2(d2control * x(n));
+
+        y(n) = ((stage12 + stage2) / 2) * outputgain;
+    end
+end
+
+\end{lstlisting}
+
+Running these scripts result in MATLAB outputting 8 total .wav files; one for each test.
+Getting JUCE to output an audio file is fairly straight forward as well. The original
+\lstinline{TestAudio.wav} file is imported into a DAW or any other piece of software that
+supports loading and running a VST or AU; in this case, Audacity. This piece of software
+was chosen because it is light weight and supports scripting which can help developers automate testing.
+(Audacity, 2021). Audacity also exports 8 .wav files. Each .wav file exported from MATLAB and Audacity
+are then compared on a sample by sample basis. MATLAB is utilized again to complete this process.
+Both files are imported through a script and graphed to show the differences between the files.
+
+
+\section{Discussion}
+The development process was tested in incremental steps. Each time a distortion block
+was added to the output, tests were ran to make sure the resulting signal was consistent. After implementing
+all 3 blocks, the plugin was tested for a final time. The final test resulted in slight variations between the MATLAB output and the JUCE output.
+Although the audio sounds the same, the values differed by a small but inconsitent margin. These inconsistencies may be results of floating point
+rounding errors which can occur when manipulating floating point numbers (Oracle, 1991). Using a delta value
+to compare the floating point numbers may produce more consistent results.
+
+Future work can be done to make the plugin more modular. The original plan was to make a
+drag and drop system to allow the user to add more distortion blocks either in parallel
+or series. This process does not seem that difficult but may require limiting the number
+of parallel distortion blocks that the user can apply.
+
+Some UI changes can also be made to ensure that the plugin is consistent. The drop down
+menu color scheme does not match the rest of the plugin. The LookAndFeel files are mostly
+empty but can be utilized to draw custom sliders or components in general.
+
+As always, software can always be tested more. Testing every permutation of the
+distortion types would further prove the results of the plugin. This testing process
+is within scope but as more distortion algorithms are added, testing becomes harder to complete.
+
+\pagebreak
+\section{Conclusion}
+The goal of the assessment was to create a novel distortion plugin using JUCE. The
+development process follows prototyping in MATLAB to ensure that the plugin produces
+the expected results. The MATLAB prototype also confirms that the distortion algorithms
+produce expected output. Comparing the output produced by both MATLAB and JUCE proved to
+be beneficial in the verification process for the plugin. Additionally, exploring different
+distortion types and configurations produced interesting results.
+
+\pagebreak
+\addcontentsline{toc}{section}{References}
+\begin{thebibliography}{9}
+\bibitem{ha01}
+hack audio (2020)
+\textit{hack audio - Hard Clipping}. \\\textit{https://www.hackaudio.com/digital-signal-processing/distortion-effects/hard-clipping/
+}. (Accessed: 16 May 2021).
+
+\bibitem{ha02}
+hack audio (2020)
+\textit{hack audio - Soft Clipping}. \\\textit{https://www.hackaudio.com/digital-signal-processing/distortion-effects/soft-clipping/
+}. (Accessed: 16 May 2021).
+
+\bibitem{audacity}
+Audacity (2021)
+\textit{Audacity - Scripting}. \\\textit{https://manual.audacityteam.org/man/scripting.html
+}. (Accessed: 16 May 2021).
+
+\bibitem{float}
+Oracle (1991)
+\textit{Computing Surveys - What Every Computer Scientist Should Know About Floating-Point Arithmetic}. \\\textit{https://docs.oracle.com/cd/E19957-01/806-3568/ncg\_goldberg.html}. (Accessed: 16 May 2021).
+
+\end{thebibliography}
+
+
+\pagebreak
+
+\section{Project Overview}
+Here is a useful description of the project hierarchy including brief descriptions
+of all the files.
+
+\begin{itemize}
+  \item Source: main code for the JUCE plugin
+  \begin{itemize}
+    \item Distortion: Anything related to the distortion algorithms
+    \begin{itemize}
+      \item \lstinline{DistortionTypes.h}: distortion algorithm implementations
+    \end{itemize}
+    \item Parameters: Parameter related files for the plugin
+    \begin{itemize}
+      \item \lstinline{DistortionController.cpp}: distortion block implementation
+      \item \lstinline{DistortionController.h}: distortion block definition
+      \item \lstinline{ModistParameter.h}: parameter related definitions
+    \end{itemize}
+    \item UI: relating to the user interface
+    \begin{itemize}
+      \item \lstinline{InterfaceDefines.h}: layout defined
+      \item \lstinline{ModistLookAndFeel.h}: look and feel for custom components
+    \end{itemize}
+    \item \lstinline{PluginProcessor.cpp}
+    \item \lstinline{PluginProcessor.h}
+    \item \lstinline{PluginEditor.cpp}
+    \item \lstinline{PluginEditor.h}
+  \end{itemize}
+  \item Testing: MATLAB code and test audio files
+  \begin{itemize}
+    \item \lstinline{CreateTestAudio.m}: creates a simple sine wave audio file
+    \item \lstinline{DistortionPrototype.m}: main prototype for the project. includes graphs.
+    \item \lstinline{DistortionTest.m}: Prototype packaged into a function to allow testing by changing user parameters.
+    \item \lstinline{MRunMatlabTests.m}: Run all the MATLAB tests to produce audio files
+    \item \lstinline{CompareFiles.m}: Compare two audio files. Used to compare output from MATLAB and output from JUCE plugin
+  \end{itemize}
+  \item \lstinline{Modist.jucer}: jucer file
+\end{itemize}
+
+\pagebreak
+
+
+\section{Appendix: Source Code}
+\begin{appendix}
+\pagenumbering{gobble}
+
+\subsection{PluginProcessor.h}
+\begin{lstlisting}[language=C++]
+/*
+  ==============================================================================
+
+    This file contains the basic framework code for a JUCE plugin processor.
+
+  ==============================================================================
+*/
+#pragma once
+#include <JuceHeader.h>
+#include "DistortionTypes.h"
+
+//==============================================================================
+/**
+*/
+class ModistAudioProcessor  : public juce::AudioProcessor
+{
+public:
+    //==============================================================================
+    ModistAudioProcessor();
+    ~ModistAudioProcessor() override;
+
+    //==============================================================================
+    void prepareToPlay (double sampleRate, int samplesPerBlock) override;
+    void releaseResources() override;
+
+   #ifndef JucePlugin_PreferredChannelConfigurations
+    bool isBusesLayoutSupported (const BusesLayout& layouts) const override;
+   #endif
+
+    void processBlock (juce::AudioBuffer<float>&, juce::MidiBuffer&) override;
+
+    //==============================================================================
+    juce::AudioProcessorEditor* createEditor() override;
+    bool hasEditor() const override;
+
+    //==============================================================================
+    const juce::String getName() const override;
+
+    bool acceptsMidi() const override;
+    bool producesMidi() const override;
+    bool isMidiEffect() const override;
+    double getTailLengthSeconds() const override;
+
+    //==============================================================================
+    int getNumPrograms() override;
+    int getCurrentProgram() override;
+    void setCurrentProgram (int index) override;
+    const juce::String getProgramName (int index) override;
+    void changeProgramName (int index, const juce::String& newName) override;
+
+    //==============================================================================
+    void getStateInformation (juce::MemoryBlock& destData) override;
+    void setStateInformation (const void* data, int sizeInBytes) override;
+
+    juce::AudioProcessorValueTreeState parameters;
+
+private:
+    //==============================================================================
+    juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout();
+
+    // array of function pointers for the different types of distortion algorithms
+    float (*distType[NUM_DIST_ALG])(float) = {
+        &hardLimit,
+        &sineWrap,
+        &signWrap
+    };
+
+    // User controls
+    juce::AudioParameterFloat *D1Control1;
+    juce::AudioParameterFloat *D1Control2;
+    juce::AudioParameterFloat *D2Control;
+
+    juce::AudioParameterFloat *outputGain;
+
+    juce::AudioParameterInt *D1Choice1;
+    juce::AudioParameterInt *D1Choice2;
+    juce::AudioParameterInt *D2Choice;
+
+    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (ModistAudioProcessor)
+};
+
+\end{lstlisting}
+
+\pagebreak
+
+\subsection{PluginProcessor.cpp}
+\begin{lstlisting}[language=C++]
+/*
+==============================================================================
+
+  This file contains the basic framework code for a JUCE plugin processor.
+
+==============================================================================
+*/
+
+#include "PluginProcessor.h"
+#include "PluginEditor.h"
+
+#include "ModistParameters.h"
+
+//==============================================================================
+ModistAudioProcessor::ModistAudioProcessor()
+#ifndef JucePlugin_PreferredChannelConfigurations
+   : AudioProcessor (BusesProperties()
+                   #if ! JucePlugin_IsMidiEffect
+                    #if ! JucePlugin_IsSynth
+                     .withInput  ("Input",  juce::AudioChannelSet::stereo(), true)
+                    #endif
+                     .withOutput ("Output", juce::AudioChannelSet::stereo(), true)
+                   #endif
+                     ),
+     parameters(*this, nullptr, "PARAMETERS", createParameterLayout())
+#endif
+{
+
+  // get pointers to all the user control parameters
+  D1Control1 = (juce::AudioParameterFloat *)parameters.getParameter("D1Control1");
+  D1Control2 = (juce::AudioParameterFloat *)parameters.getParameter("D1Control2");
+  D2Control  = (juce::AudioParameterFloat *)parameters.getParameter("D2Control");
+
+  outputGain = (juce::AudioParameterFloat *)parameters.getParameter("OutputGain");
+
+  D1Choice1 = (juce::AudioParameterInt *)parameters.getParameter("D1Choice1");
+  D1Choice2 = (juce::AudioParameterInt *)parameters.getParameter("D1Choice2");
+  D2Choice  = (juce::AudioParameterInt *)parameters.getParameter("D2Choice");
+}
+
+ModistAudioProcessor::~ModistAudioProcessor()
+{
+}
+
+//==============================================================================
+const juce::String ModistAudioProcessor::getName() const
+{
+  return JucePlugin_Name;
+}
+
+bool ModistAudioProcessor::acceptsMidi() const
+{
+ #if JucePlugin_WantsMidiInput
+  return true;
+ #else
+  return false;
+ #endif
+}
+
+bool ModistAudioProcessor::producesMidi() const
+{
+ #if JucePlugin_ProducesMidiOutput
+  return true;
+ #else
+  return false;
+ #endif
+}
+
+bool ModistAudioProcessor::isMidiEffect() const
+{
+ #if JucePlugin_IsMidiEffect
+  return true;
+ #else
+  return false;
+ #endif
+}
+
+double ModistAudioProcessor::getTailLengthSeconds() const
+{
+  return 0.0;
+}
+
+int ModistAudioProcessor::getNumPrograms()
+{
+  return 1;   // NB: some hosts don't cope very well if you tell them there are 0 programs,
+              // so this should be at least 1, even if you're not really implementing programs.
+}
+
+int ModistAudioProcessor::getCurrentProgram()
+{
+  return 0;
+}
+
+void ModistAudioProcessor::setCurrentProgram (int index)
+{
+}
+
+const juce::String ModistAudioProcessor::getProgramName (int index)
+{
+  return {};
+}
+
+void ModistAudioProcessor::changeProgramName (int index, const juce::String& newName)
+{
+}
+
+//==============================================================================
+void ModistAudioProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
+{
+  // Use this method as the place to do any pre-playback
+  // initialisation that you need..
+}
+
+void ModistAudioProcessor::releaseResources()
+{
+  // When playback stops, you can use this as an opportunity to free up any
+  // spare memory, etc.
+}
+
+#ifndef JucePlugin_PreferredChannelConfigurations
+bool ModistAudioProcessor::isBusesLayoutSupported (const BusesLayout& layouts) const
+{
+#if JucePlugin_IsMidiEffect
+  juce::ignoreUnused (layouts);
+  return true;
+#else
+  // This is the place where you check if the layout is supported.
+  // In this template code we only support mono or stereo.
+  // Some plugin hosts, such as certain GarageBand versions, will only
+  // load plugins that support stereo bus layouts.
+  if (layouts.getMainOutputChannelSet() != juce::AudioChannelSet::mono()
+   && layouts.getMainOutputChannelSet() != juce::AudioChannelSet::stereo())
+      return false;
+
+  // This checks if the input layout matches the output layout
+ #if ! JucePlugin_IsSynth
+  if (layouts.getMainOutputChannelSet() != layouts.getMainInputChannelSet())
+      return false;
+ #endif
+
+  return true;
+#endif
+}
+#endif
+
+void ModistAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midiMessages)
+{
+  int numSamples = buffer.getNumSamples();
+  if (numSamples == 0) {
+      return; // no audio to process
+  }
+
+  int numOutputs = getTotalNumOutputChannels();
+  auto channelDataL = buffer.getWritePointer(0);
+  auto channelDataR = (numOutputs == 2) ? buffer.getWritePointer(1) : buffer.getWritePointer(0);
+
+  for (int n = 0; n < numSamples; n++) {
+      float currSample = buffer.getSample(0, n);
+
+      float stage11 = distType[(int)D1Choice1->get()](currSample * D1Control1->get());
+
+      float stage12 = distType[(int)D1Choice2->get()](stage11 * D1Control2->get());
+
+      float stage2 = distType[(int)D2Choice->get()](currSample * D2Control->get());
+
+      channelDataL[n] = ((stage12 + stage2) / 2.0f) * outputGain->get();
+
+      if (numOutputs == 2) {
+          channelDataR[n] = channelDataL[n];
+      }
+  }
+
+}
+
+//==============================================================================
+bool ModistAudioProcessor::hasEditor() const
+{
+  return true; // (change this to false if you choose to not supply an editor)
+}
+
+juce::AudioProcessorEditor* ModistAudioProcessor::createEditor()
+{
+  return new ModistAudioProcessorEditor (*this);
+}
+
+//==============================================================================
+void ModistAudioProcessor::getStateInformation (juce::MemoryBlock& destData)
+{
+  // You should use this method to store your parameters in the memory block.
+  // You could do that either as raw data, or use the XML or ValueTree classes
+  // as intermediaries to make it easy to save and load complex data.
+  auto state = parameters.copyState();
+  std::unique_ptr<juce::XmlElement> xml (state.createXml());
+  copyXmlToBinary (*xml, destData);
+}
+
+void ModistAudioProcessor::setStateInformation (const void* data, int sizeInBytes)
+{
+  // You should use this method to restore your parameters from this memory block,
+  // whose contents will have been created by the getStateInformation() call.
+  std::unique_ptr<juce::XmlElement> xmlState (getXmlFromBinary (data, sizeInBytes));
+
+  if (xmlState.get() != nullptr)
+      if (xmlState->hasTagName (parameters.state.getType()))
+          parameters.replaceState (juce::ValueTree::fromXml (*xmlState));
+}
+
+//==============================================================================
+// This creates new instances of the plugin..
+juce::AudioProcessor* JUCE_CALLTYPE createPluginFilter()
+{
+  return new ModistAudioProcessor();
+}
+
+//==============================================================================
+// Intialize the parameters
+juce::AudioProcessorValueTreeState::ParameterLayout ModistAudioProcessor::createParameterLayout()
+{
+  juce::AudioProcessorValueTreeState::ParameterLayout params;
+
+  for (int i = 0; i < MP_TotalNumParameters; i++) {
+
+      switch(ModistParameterTypes[i]) {
+          case is_int:
+              params.add(std::make_unique<juce::AudioParameterInt>(ModistParameterID[i],
+                                                                   ModistParameterID[i],
+                                                                   ModistParameterMin[i],
+                                                                   ModistParameterMax[i],
+                                                                   ModistParameterDefault[i],
+                                                                   ModistParameterID[i]));
+
+              break;
+          case is_float:
+              params.add(std::make_unique<juce::AudioParameterFloat>(ModistParameterID[i],
+                                                                     ModistParameterID[i],
+                                                                     juce::NormalisableRange<float>(ModistParameterMin[i], ModistParameterMax[i]),
+                                                                     ModistParameterDefault[i],
+                                                                     ModistParameterID[i]));
+
+              break;
+      }
+  }
+
+  return params;
+}
+
+\end{lstlisting}
+\pagebreak
+
+\subsection{PluginEditor.h}
+\begin{lstlisting}[language=C++]
+/*
+  ==============================================================================
+
+    This file contains the basic framework code for a JUCE plugin editor.
+
+  ==============================================================================
+*/
+
+#pragma once
+
+#include <JuceHeader.h>
+#include "PluginProcessor.h"
+
+#include "DistortionController.h"
+#include "ModistLookAndFeel.h"
+
+//==============================================================================
+/**
+*/
+class ModistAudioProcessorEditor : public juce::AudioProcessorEditor
+{
+public:
+    ModistAudioProcessorEditor (ModistAudioProcessor&);
+    ~ModistAudioProcessorEditor() override;
+
+    //==============================================================================
+    void paint (juce::Graphics&) override;
+    void resized() override;
+
+private:
+    // This reference is provided as a quick way for your editor to
+    // access the processor object that created it.
+    ModistAudioProcessor& audioProcessor;
+
+    DistortionController mD1Controller1;
+    DistortionController mD1Controller2;
+    DistortionController mD2Controller;
+
+    juce::Slider mOutputGainSlider;
+
+    ModistLookAndFeel mMLF;
+
+    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (ModistAudioProcessorEditor)
+};
+\end{lstlisting}
+\pagebreak
+\subsection{PluginEditor.cpp}
+\begin{lstlisting}[language=C++]
+/*
+  ==============================================================================
+
+    This file contains the basic framework code for a JUCE plugin editor.
+
+  ==============================================================================
+*/
+
+#include "PluginProcessor.h"
+#include "PluginEditor.h"
+
+#include "InterfaceDefines.h"
+#include "ModistParameters.h"
+
+//==============================================================================
+ModistAudioProcessorEditor::ModistAudioProcessorEditor (ModistAudioProcessor& p)
+    : AudioProcessorEditor (&p), audioProcessor (p),
+      mD1Controller1(audioProcessor.getParameters().getReference(MP_D1Control1),
+                     audioProcessor.getParameters().getReference(MP_D1Choice1),
+                     juce::Colour::fromFloatRGBA(0.427, 0.831, 1.0, 1.0)),
+      mD1Controller2(audioProcessor.getParameters().getReference(MP_D1Control2),
+                     audioProcessor.getParameters().getReference(MP_D1Choice2),
+                     juce::Colour::fromFloatRGBA(0.341, 0.741, 0.659, 1.0)),
+      mD2Controller(audioProcessor.getParameters().getReference(MP_D2Control),
+                    audioProcessor.getParameters().getReference(MP_D2Choice),
+                    juce::Colour::fromFloatRGBA(1.0, 0.706, 0.196, 1.0))
+{
+    // Make sure that before the constructor has finished, you've set the
+    // editor's size to whatever you need it to be.
+    setSize (MAIN_PANEL_WIDTH, MAIN_PANEL_HEIGHT);
+
+    // for each distortion controller
+    // - add it to the scene
+    // - set position (in resized)
+    addAndMakeVisible(mD1Controller1);
+    addAndMakeVisible(mD1Controller2);
+    addAndMakeVisible(mD2Controller);
+
+    addAndMakeVisible(mOutputGainSlider);
+    mOutputGainSlider.setSliderStyle(juce::Slider::LinearBarVertical);
+    mOutputGainSlider.setTextBoxStyle(juce::Slider::TextBoxBelow, false, mOutputGainSlider.getTextBoxWidth(), mOutputGainSlider.getTextBoxHeight());
+    mOutputGainSlider.setVelocityBasedMode(true);
+    mOutputGainSlider.setVelocityModeParameters(0.5, 1, 0.09, false);
+    mOutputGainSlider.setRange(0, 1, 0.01);
+    mOutputGainSlider.setValue(audioProcessor.parameters.getParameter("OutputGain")->getValue());
+
+    mOutputGainSlider.setColour(juce::Slider::textBoxBackgroundColourId, juce::Colours::black.brighter(0.09));
+    mOutputGainSlider.setColour(juce::Slider::textBoxTextColourId, juce::Colours::white);
+    mOutputGainSlider.setColour(juce::Slider::trackColourId, juce::Colours::transparentWhite);
+    mOutputGainSlider.setColour(juce::Slider::textBoxOutlineColourId, juce::Colours::transparentWhite);
+
+    mOutputGainSlider.onValueChange = [this] {
+        processor.getParameters().getReference(MP_OutputGain)->setValue(mOutputGainSlider.getValue());
+    };
+
+}
+
+ModistAudioProcessorEditor::~ModistAudioProcessorEditor()
+{
+
+}
+
+//==============================================================================
+void ModistAudioProcessorEditor::paint (juce::Graphics& g)
+{
+    g.fillAll(mMLF.getBackground());
+
+    g.setColour(juce::Colours::white);
+    g.drawText("x(n)", 25, (MAIN_PANEL_HEIGHT / 2.0f) - 3, 50, 5, juce::Justification::centred);
+    g.drawText("y(n)", MAIN_PANEL_WIDTH - 65, (MAIN_PANEL_HEIGHT / 2.0f) - 3, 50, 5, juce::Justification::centred);
+
+    // drawing the circle with +
+    g.drawEllipse(MAIN_PANEL_WIDTH - 165, (MAIN_PANEL_HEIGHT / 2.0f) - 15, 30, 30, 1);
+    g.drawText("+", MAIN_PANEL_WIDTH - 162, (MAIN_PANEL_HEIGHT / 2.0f) - 3, 25, 5, juce::Justification::centred);
+
+    // bunch of lines...
+    g.drawLine(65, (MAIN_PANEL_HEIGHT / 2.0f), 100, (MAIN_PANEL_HEIGHT / 2.0f));
+    g.drawLine(100, (MAIN_PANEL_HEIGHT / 2.0f) - 50, 100, (MAIN_PANEL_HEIGHT / 2.0f) + 50);
+
+    g.drawLine(100, (MAIN_PANEL_HEIGHT / 2.0f) + 50, 350, (MAIN_PANEL_HEIGHT / 2.0f) + 50);
+    g.drawLine(100, (MAIN_PANEL_HEIGHT / 2.0f) - 50, 350, (MAIN_PANEL_HEIGHT / 2.0f) - 50);
+
+    g.drawLine(350, (MAIN_PANEL_HEIGHT / 2.0f) - 50, 350, (MAIN_PANEL_HEIGHT / 2.0f) - 15);
+    g.drawLine(350, (MAIN_PANEL_HEIGHT / 2.0f) + 50, 350, (MAIN_PANEL_HEIGHT / 2.0f) + 15);
+
+    g.drawLine(365, (MAIN_PANEL_HEIGHT / 2.0f), 385, (MAIN_PANEL_HEIGHT / 2.0f));
+
+
+    // drawing the triangle
+    g.drawLine(385, (MAIN_PANEL_HEIGHT / 2.0f), 385, (MAIN_PANEL_HEIGHT / 2.0f) + 25);
+    g.drawLine(385, (MAIN_PANEL_HEIGHT / 2.0f), 385, (MAIN_PANEL_HEIGHT / 2.0f) - 25);
+
+    // more lines
+    g.drawLine(385, (MAIN_PANEL_HEIGHT / 2.0f) + 25, 430, (MAIN_PANEL_HEIGHT / 2.0f));
+    g.drawLine(385, (MAIN_PANEL_HEIGHT / 2.0f) - 25, 430, (MAIN_PANEL_HEIGHT / 2.0f));
+
+    g.drawLine(430, (MAIN_PANEL_HEIGHT / 2.0f), 445, (MAIN_PANEL_HEIGHT / 2.0f));
+}
+
+void ModistAudioProcessorEditor::resized()
+{
+    // This is generally where you'll want to lay out the positions of any
+    // subcomponents in your editor..
+    int xOffset = MAIN_PANEL_WIDTH * (1.0f/10.0f);
+    int xMidWidth = MAIN_PANEL_WIDTH * (2.0f/3.0f);
+
+    mD1Controller1.setTopLeftPosition(xOffset + (xMidWidth * (1.0f/3.0f)) - (DIST_CONTROL_WIDTH / 2.0f), (MAIN_PANEL_HEIGHT * (1.0f/3.0f)) - (DIST_CONTROL_HEIGHT / 2.0f));
+    mD1Controller2.setTopLeftPosition(xOffset + (xMidWidth * (2.0f/3.0f)) - (DIST_CONTROL_WIDTH / 2.0f), (MAIN_PANEL_HEIGHT * (1.0f/3.0f)) - (DIST_CONTROL_HEIGHT / 2.0f));
+    mD2Controller.setTopLeftPosition(xOffset + (xMidWidth * 0.5f) - (DIST_CONTROL_WIDTH / 2.0f), (MAIN_PANEL_HEIGHT * (2.0f/3.0f)) - (DIST_CONTROL_HEIGHT / 2.0f));
+
+    mOutputGainSlider.setBounds(375, (MAIN_PANEL_HEIGHT / 2.0f) - 25, 50, 50);
+}
+\end{lstlisting}
+
+\pagebreak
+\subsection{ModistParameters.h}
+\begin{lstlisting}[language=C++]
+/*
+ ==============================================================================
+
+ ModistParameters.h
+ Created: 8 May 2021 2:33:48pm
+ Author:  Nicholas Berriochoa
+
+ ==============================================================================
+ */
+
+#pragma once
+
+#include <JuceHeader.h>
+
+typedef enum type_t {
+    is_int,
+    is_float,
+} type;
+
+enum ModistParameters {
+    MP_D1Control1 = 0,
+    MP_D1Control2,
+    MP_D2Control,
+    MP_OutputGain,
+    MP_D1Choice1,
+    MP_D1Choice2,
+    MP_D2Choice,
+    MP_TotalNumParameters
+};
+
+static type ModistParameterTypes[MP_TotalNumParameters] = {
+    is_float,
+    is_float,
+    is_float,
+    is_float,
+    is_int,
+    is_int,
+    is_int
+};
+
+const juce::String ModistParameterID[MP_TotalNumParameters] = {
+    "D1Control1",
+    "D1Control2",
+    "D2Control",
+    "OutputGain",
+    "D1Choice1",
+    "D1Choice2",
+    "D2Choice"
+};
+
+const float ModistParameterMin[MP_TotalNumParameters] = {
+    1.0,
+    1.0,
+    1.0,
+    0.0,
+    0,
+    0,
+    0
+};
+
+const float ModistParameterDefault[MP_TotalNumParameters] = {
+    1.0,
+    1.0,
+    1.0,
+    0.5,
+    0,
+    0,
+    1
+};
+
+const float ModistParameterMax[MP_TotalNumParameters] = {
+    30.0,
+    30.0,
+    30.0,
+    1.0,
+    2,
+    2,
+    2
+};
+
+\end{lstlisting}
+
+\subsection{ModistLookAndFeel.h}
+\begin{lstlisting}[language=C++]
+/*
+  ==============================================================================
+
+    ModistLookAndFeel.h
+    Created: 8 May 2021 2:34:10pm
+    Author:  Nicholas Berriochoa
+
+  ==============================================================================
+*/
+
+#pragma once
+
+#include <JuceHeader.h>
+
+class ModistLookAndFeel
+:   public juce::LookAndFeel_V4
+{
+public:
+    ModistLookAndFeel()
+    {
+    }
+    ~ModistLookAndFeel() {
+    }
+    juce::Colour getBackground() {
+        return background;
+    }
+private:
+    juce::Colour background = juce::Colour::fromFloatRGBA (0.08, 0.08, 0.08, 1.0);
+};
+
+class DistortionLookAndFeel
+:   public juce::LookAndFeel_V4
+{
+public:
+    DistortionLookAndFeel() {
+    }
+    ~DistortionLookAndFeel() {
+    }
+private:
+};
+
+class GainLookAndFeel
+:   public juce::LookAndFeel_V4
+{
+public:
+    GainLookAndFeel() {
+    }
+    ~GainLookAndFeel() {
+    }
+private:
+
+};
+
+\end{lstlisting}
+
+\subsection{InterfaceDefines.h}
+\begin{lstlisting}[language=C++]
+/*
+  ==============================================================================
+
+    InterfaceDefines.h
+    Created: 8 May 2021 2:33:58pm
+    Author:  Nicholas Berriochoa
+
+  ==============================================================================
+*/
+
+#pragma once
+
+#define MAIN_PANEL_WIDTH 500
+#define MAIN_PANEL_HEIGHT 300
+
+#define DIST_CONTROL_WIDTH 75
+#define DIST_CONTROL_HEIGHT 75
+
+\end{lstlisting}
+
+
+\pagebreak
+\subsection{DistortionTypes.h}
+\begin{lstlisting}[language=C++]
+/*
+  ==============================================================================
+
+    DistortionTypes.h
+    Created: 9 May 2021 11:27:33am
+    Author:  Nicholas Berriochoa
+
+  ==============================================================================
+*/
+
+#pragma once
+
+#include <JuceHeader.h>
+
+#define NUM_DIST_ALG 3
+
+const juce::String algorithmChoices[NUM_DIST_ALG] = {
+    "Hard Limit",
+    "Sine Wrap",
+    "Sign Wrap"
+};
+
+inline float hardLimit(float sample) {
+    return fminf(fmaxf(sample, -1.0f), 1.0f);
+}
+
+inline float sineWrap(float sample) {
+    return sinf(sample);
+}
+
+inline float signWrap(float sample) {
+    return fmodf((sample + 1.0f), 2.0f) + 1.0f;
+}
+
+\end{lstlisting}
+
+
+
+\subsection{DistortionController.h}
+\begin{lstlisting}[language=C++]
+/*
+  ==============================================================================
+
+    DistortionController.h
+    Created: 8 May 2021 3:11:20pm
+    Author:  Nicholas Berriochoa
+
+  ==============================================================================
+*/
+
+#pragma once
+
+#include <JuceHeader.h>
+
+#include "ModistLookAndFeel.h"
+
+class DistortionController
+:   public juce::Component,
+    public juce::Slider::Listener,
+    public juce::ComboBox::Listener
+{
+public:
+    DistortionController(juce::AudioProcessorParameter* level, juce::AudioProcessorParameter* choice, juce::Colour colour);
+    ~DistortionController();
+
+    void resized() override;
+
+    void sliderValueChanged(juce::Slider* slider) override;
+    void comboBoxChanged(juce::ComboBox* comboBox) override;
+
+private:
+    juce::Slider     mLevelSlider;
+    juce::ComboBox   mAlgorithmChoice;
+
+    juce::AudioParameterFloat* mLevel;
+    juce::AudioParameterFloat* mChoices;
+};
+
+\end{lstlisting}
+
+
+\pagebreak
+\subsection{DistortionController.cpp}
+\begin{lstlisting}[language=C++]
+/*
+  ==============================================================================
+
+    DistortionController.cpp
+    Created: 8 May 2021 3:11:20pm
+    Author:  Nicholas Berriochoa
+
+  ==============================================================================
+*/
+
+#include "DistortionController.h"
+
+#include "InterfaceDefines.h"
+#include "DistortionTypes.h"
+
+DistortionController::DistortionController(juce::AudioProcessorParameter* level, juce::AudioProcessorParameter* choice, juce::Colour colour)
+:   mLevel((juce::AudioParameterFloat *)level),
+    mChoices((juce::AudioParameterFloat *)choice)
+{
+    setSize(DIST_CONTROL_WIDTH, DIST_CONTROL_HEIGHT);
+
+    // for each part of the controller
+    // - add it to the scene
+    // - add a listener
+    // - anything extra
+
+    addAndMakeVisible(mLevelSlider);
+    mLevelSlider.addListener(this);
+
+    mAlgorithmChoice.setColour(juce::ComboBox::backgroundColourId, juce::Colours::black.brighter(0.09));
+    mAlgorithmChoice.setColour(juce::ComboBox::textColourId, colour);
+    mAlgorithmChoice.setColour(juce::ComboBox::arrowColourId, colour);
+
+    for (int i = 0; i < NUM_DIST_ALG; i++) {
+        mAlgorithmChoice.addItem(algorithmChoices[i], i+1);
+    }
+
+    mAlgorithmChoice.setSelectedItemIndex((int)*mChoices);
+
+    mLevelSlider.setColour(juce::Slider::textBoxBackgroundColourId, juce::Colours::black.brighter(0.09));
+    mLevelSlider.setColour(juce::Slider::textBoxTextColourId, colour);
+    mLevelSlider.setSliderStyle(juce::Slider::LinearBarVertical);
+    mLevelSlider.setColour(juce::Slider::trackColourId, juce::Colours::transparentWhite);
+
+    mLevelSlider.setVelocityBasedMode(true);
+    mLevelSlider.setVelocityModeParameters(0.5, 1, 0.09, false);
+    mLevelSlider.setRange(1, 30, 0.1);
+    mLevelSlider.setValue(*mLevel);
+    mLevelSlider.setTextBoxStyle(juce::Slider::TextBoxBelow, false, mLevelSlider.getTextBoxWidth(), mLevelSlider.getTextBoxHeight());
+
+    addAndMakeVisible(mAlgorithmChoice);
+    mAlgorithmChoice.addListener(this);
+}
+
+DistortionController::~DistortionController()
+{
+
+}
+
+void DistortionController::resized()
+{
+
+    mLevelSlider.setBounds(0, (DIST_CONTROL_HEIGHT / 2), DIST_CONTROL_WIDTH, DIST_CONTROL_HEIGHT / 2);
+    mAlgorithmChoice.setBounds(0, 0, DIST_CONTROL_WIDTH, DIST_CONTROL_HEIGHT / 2);
+}
+
+void DistortionController::sliderValueChanged(juce::Slider* slider)
+{
+    if (slider == &mLevelSlider) {
+        *mLevel = slider->getValue();
+    }
+}
+
+void DistortionController::comboBoxChanged(juce::ComboBox* comboBox)
+{
+    if (comboBox == &mAlgorithmChoice) {
+        *mChoices = comboBox->getSelectedItemIndex();
+    }
+}
+\end{lstlisting}
+
+\pagebreak
+\subsection{DistortionPrototype.m}
+\begin{lstlisting}[language=MATLAB]
+%
+% A1 Prototyping
+%
+
+clear;
+close all;
+
+% params
+Fs = 48000;         % sampling rate (Hz)
+T = 1/Fs;           % sampling period (s)
+L  = 10;            % simulation length (s)
+N = L * Fs;         % number of samples
+
+% input array sine wave
+t = 0:2*pi/(N-1):2*pi;
+x = sin(t);
+x = x';
+
+% user controls
+% these will be changed later for testing
+d1control1 = 1.5;
+d1control2 = 1.3;
+
+d2control = 1.8;
+
+output_gain = 1;
+
+% distortion stages
+% these are extra arrays used to graph each stage of distortion
+stage11 = zeros(N, 1);
+stage12 = zeros(N, 1);
+
+stage2 = zeros(N, 1);
+
+% output array y(n)
+y = zeros(N, 1);
+
+% main time loop
+for n = 1:N
+    % for each distortion block
+    % 1. apply the user control (drive)
+    % 2. feed value into the appropriate function
+
+    % start cascade
+    % d1 hard limiter
+    stage11(n) = sine_foldover(x(n) * d1control1);
+
+    % note passing stage11(n) rather than x(n)
+    stage12(n) = hard_limit(stage11(n) * d1control2);
+    % end cascade
+
+    % start parallel
+    % d2 sine foldover
+    stage2(n) = sine_foldover(x(n) * d2control);
+    % end parallel
+
+    % average the signals and apply user controlled output gain
+    y(n) = ((stage12(n) + stage2(n)) / 2) * output_gain;
+end
+
+% plot stuff to verify the data
+% original signal
+figure;
+plot(t, x);
+
+% d1 block 1
+% input - original signal
+% original signal with d1control1 applied
+% signal after running through distortion algorithm
+figure;
+plot(t, x*d1control1);
+hold on;
+plot(t, stage11);
+title("time vs output");
+xlabel("time (s)");
+ylabel("output y(n)");
+hold off;
+
+% d1 block 2
+% input - signal from d1
+figure;
+plot(t, stage11*d1control2);
+hold on;
+plot(t, stage12);
+
+% d2 block 1
+% input - original signal
+figure;
+plot(t, x*d2control);
+hold on;
+plot(t, stage2);
+hold off;
+
+% output y(n)
+figure;
+plot(t, y);
+
+% distortion algorithms
+function output = hard_limit(input)
+    output = min(max(input, -1), 1);
+end
+
+function output = sine_foldover(input)
+    output = sin(input);
+end
+
+function output = sign_wraparound(input)
+    output = mod(input + 1, 2) - 1;
+end
+\end{lstlisting}
+
+\pagebreak
+\subsection{CreateTestAudio.m}
+\begin{lstlisting}[language=MATLAB]
+%
+% This file generates a simple .wav file for testing purposes
+%
+
+clear;
+close all;
+
+Fs = 48000;                         % sampling rate
+T = 1/Fs;                           % sampling period
+L = 5;                              % length (in seconds)
+f0 = 440;                           % tone to generate
+x = sin(2*pi*f0*[0:T:5-T]);         % generate the sine wave
+audiowrite("TestAudio.wav", x, Fs); % create the audio file
+
+\end{lstlisting}
+\subsection{DistortionTest.m}
+\begin{lstlisting}[language=MATLAB]
+function y = DistortionTest(x, d11, d12, d2, d1control1, d1control2, d2control, outputgain)
+  N = length(x);
+
+  % the following code has been copied from DistortionPrototype.m
+  % with slight modifications such as removing graphing elements
+
+  % output array y(n)
+  y = zeros(N, 1);
+
+  % main time loop
+  for n = 1:N
+      % for each distortion block
+      % 1. apply the user control (drive)
+      % 2. feed value into the appropriate function
+
+      stage11 = d11(d1control1 * x(n));
+      stage12 = d12(d1control2 * stage11);
+
+      stage2 = d2(d2control * x(n));
+
+      y(n) = ((stage12 + stage2) / 2) * outputgain;
+  end
+end
+\end{lstlisting}
+
+\subsection{RunMatlabTests.m}
+\begin{lstlisting}[language=MATLAB]
+%
+% This file will run all the matlab tests
+% Most of the code was copied over from the main distortion file
+%
+
+clear;
+close all;
+
+% per the specification, there are n+1 tests where n is the number of user
+% controls
+
+% read in the test file. this can be changed to a different file
+% name for further testing
+[x, Fs] = audioread("TestAudio.wav");
+
+y = DistortionTest(x, @sine_foldover, @hard_limit, @sine_foldover, 20.5, 18.1, 14.6, 0.8);
+audiowrite("MatlabTest1.wav", y, Fs);
+
+y = DistortionTest(x, @sign_wraparound, @sign_wraparound, @sine_foldover, 5.4, 23.7, 28.7, 0.52);
+audiowrite("MatlabTest2.wav", y, Fs);
+
+y = DistortionTest(x, @hard_limit, @sine_foldover, @sine_foldover, 3.3, 6.9, 7.5, 0.84);
+audiowrite("MatlabTest3.wav", y, Fs);
+
+y = DistortionTest(x, @sine_foldover, @sign_wraparound, @sine_foldover, 15, 7.8, 19.6, 0.57);
+audiowrite("MatlabTest4.wav", y, Fs);
+
+y = DistortionTest(x, @sine_foldover, @sign_wraparound, @sine_foldover, 22.5, 1.6, 25.4, 0.38);
+audiowrite("MatlabTest5.wav", y, Fs);
+
+y = DistortionTest(x, @hard_limit, @hard_limit, @sign_wraparound, 11.7, 14.1, 6.3, 0.55);
+audiowrite("MatlabTest6.wav", y, Fs);
+
+y = DistortionTest(x, @hard_limit, @hard_limit, @hard_limit, 1.2, 18.5, 16.1, 0.94);
+audiowrite("MatlabTest7.wav", y, Fs);
+
+y = DistortionTest(x, @sine_foldover, @sine_foldover, @sine_foldover, 2.2, 18.1, 11.4, 0.24);
+audiowrite("MatlabTest8.wav", y, Fs);
+
+% distortion algorithms
+function output = hard_limit(input)
+    output = min(max(input, -1), 1);
+end
+
+function output = sine_foldover(input)
+    output = sin(input);
+end
+
+function output = sign_wraparound(input)
+    output = mod(input + 1, 2) - 1;
+end
+
+\end{lstlisting}
+\pagebreak
+\subsection{CompareFiles.m}
+\begin{lstlisting}[language=MATLAB]
+%
+% This file is used to compare the files generated from
+% Matlab and JUCE
+%
+
+clear;
+close all;
+
+[y1, Fs1] = audioread("MatlabTest1.wav");
+[y2, Fs2] = audioread("JuceTest1.wav");
+
+plot(y1-y2);
+
+\end{lstlisting}
+
+\end{appendix}
+
+
+\end{document}
