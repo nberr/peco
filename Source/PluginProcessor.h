@@ -53,7 +53,24 @@ public:
     void getStateInformation (juce::MemoryBlock& destData) override;
     void setStateInformation (const void* data, int sizeInBytes) override;
 
+    // plugin parameters
+    juce::AudioProcessorValueTreeState parameters;
+    bool delayChanged = true;
+    
 private:
+    
+    juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout();
+    
+    float hard_limit(float input);
+    
+    float DDL[2][96000];
+    int writeInx = 0;
+    
+    int delayInxLow;
+    int delayInxMid;
+    int delayInxHigh;
+    int D = 96000;
+    
     //==============================================================================
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (PecoAudioProcessor)
 };

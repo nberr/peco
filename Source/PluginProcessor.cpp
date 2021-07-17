@@ -9,6 +9,8 @@
 #include "PluginProcessor.h"
 #include "PluginEditor.h"
 
+#include "PecoParameters.h"
+
 //==============================================================================
 PecoAudioProcessor::PecoAudioProcessor()
 #ifndef JucePlugin_PreferredChannelConfigurations
@@ -19,9 +21,14 @@ PecoAudioProcessor::PecoAudioProcessor()
                       #endif
                        .withOutput ("Output", juce::AudioChannelSet::stereo(), true)
                      #endif
-                       )
+                       ),
+        parameters(*this, nullptr, "PARAMETERS", createParameterLayout())
 #endif
 {
+    for (int i = 0; i < 96000; i++) {
+        DDL[0][i] = 0;
+        DDL[1][i] = 0;
+    }
 }
 
 PecoAudioProcessor::~PecoAudioProcessor()
@@ -131,30 +138,93 @@ bool PecoAudioProcessor::isBusesLayoutSupported (const BusesLayout& layouts) con
 
 void PecoAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midiMessages)
 {
-    juce::ScopedNoDenormals noDenormals;
-    auto totalNumInputChannels  = getTotalNumInputChannels();
-    auto totalNumOutputChannels = getTotalNumOutputChannels();
-
-    // In case we have more outputs than inputs, this code clears any output
-    // channels that didn't contain input data, (because these aren't
-    // guaranteed to be empty - they may contain garbage).
-    // This is here to avoid people getting screaming feedback
-    // when they first compile a plugin, but obviously you don't need to keep
-    // this code if your algorithm always overwrites all the output channels.
-    for (auto i = totalNumInputChannels; i < totalNumOutputChannels; ++i)
-        buffer.clear (i, 0, buffer.getNumSamples());
-
-    // This is the place where you'd normally do the guts of your plugin's
-    // audio processing...
-    // Make sure to reset the state if your inner loop is processing
-    // the samples and the outer loop is handling the channels.
-    // Alternatively, you can process the samples with the channels
-    // interleaved by keeping the same state.
-    for (int channel = 0; channel < totalNumInputChannels; ++channel)
-    {
-        auto* channelData = buffer.getWritePointer (channel);
-
-        // ..do something to the data...
+    int numSamples = buffer.getNumSamples();
+    if (numSamples == 0) {
+        return; // no audio to process
+    }
+    
+    int numOutputs = getTotalNumOutputChannels();
+    auto channelDataL = buffer.getWritePointer(0);
+    auto channelDataR = (numOutputs == 2) ? buffer.getWritePointer(1) : buffer.getWritePointer(0);
+    
+    for (int n = 0; n < numSamples; n++) {
+        // get the user parameters
+        float wetL = parameters.getParameter(PecoParameterID[WetDryL])->getValue();
+        float dryL = 1.0f - wetL;
+        
+        float wetR = parameters.getParameter(PecoParameterID[WetDryR])->getValue();
+        float dryR = 1.0f - wetR;
+        
+        float fbL = parameters.getParameter(PecoParameterID[FeedbackL])->getValue();
+        float fbR = parameters.getParameter(PecoParameterID[FeedbackR])->getValue();
+        
+        if (delayChanged) {
+            
+            for (int i = 0; i < 96000; i++) {
+                DDL[0][i] = 0;
+                DDL[1][i] = 0;
+            }
+            
+            writeInx = 0;
+            
+            delayInxLow = 96000 - ((juce::AudioParameterInt *)parameters.getParameter(PecoParameterID[Delay]))->get();
+            delayInxMid = 96000 - ((juce::AudioParameterInt *)parameters.getParameter(PecoParameterID[Delay2]))->get();
+            delayInxHigh = 96000 - ((juce::AudioParameterInt *)parameters.getParameter(PecoParameterID[Delay3]))->get();
+            
+            delayChanged = false;
+        }
+        
+        float dLevelL = ((juce::AudioParameterFloat *)parameters.getParameter(PecoParameterID[DistControlL]))->get();
+        float dLevelR = ((juce::AudioParameterFloat *)parameters.getParameter(PecoParameterID[DistControlR]))->get();
+        
+        // get the original input signal
+        float inputL = buffer.getSample(0, n);
+        float inputR = (numOutputs == 2) ? buffer.getSample(1, n) : inputL;
+        
+        // get the summed delay
+        float summedDelayL = (DDL[0][delayInxLow] + DDL[0][delayInxMid] + DDL[0][delayInxHigh]) / 3.0f;
+        float summedDelayR = (DDL[1][delayInxLow] + DDL[1][delayInxMid] + DDL[1][delayInxHigh]) / 3.0f;
+        
+        // apply distortion
+        float distL = hard_limit(summedDelayL * dLevelL);
+        float distR = hard_limit(summedDelayR * dLevelR);
+        
+        // write the wet + dry signal to the output
+        channelDataL[n] = (inputL * dryL) + (distL * wetL);
+        if (numOutputs == 2) {
+            channelDataR[n] = (inputR * dryR) + (distR * wetR);
+        }
+        
+        // update the DDL
+        // get the output of the DDL
+        float dL = distL;
+        float dR = distR;
+        
+        // add the fed back DDL and the original input
+        // be sure to scale them so the value will be between -1 and 1
+        DDL[0][writeInx] = (inputR + (dR * fbR)) / 2.0f;
+        DDL[1][writeInx] = (inputL + (dL * fbL)) / 2.0f;
+        
+        // increment the read/write index
+        writeInx++;
+        if (writeInx >= D) {
+            writeInx = 0;
+        }
+        
+        delayInxLow++;
+        if (delayInxLow >= D) {
+            delayInxLow = 0;
+        }
+        
+        delayInxMid++;
+        if (delayInxMid >= D) {
+            delayInxMid = 0;
+        }
+        
+        delayInxHigh++;
+        if (delayInxHigh >= D) {
+            delayInxHigh = 0;
+        }
     }
 }
 
@@ -188,4 +258,51 @@ void PecoAudioProcessor::setStateInformation (const void* data, int sizeInBytes)
 juce::AudioProcessor* JUCE_CALLTYPE createPluginFilter()
 {
     return new PecoAudioProcessor();
+}
+
+juce::AudioProcessorValueTreeState::ParameterLayout PecoAudioProcessor::createParameterLayout()
+{
+    juce::AudioProcessorValueTreeState::ParameterLayout params;
+    
+    for (int i = 0; i < TotalNumParameters - 4; i++)
+    {
+        params.add(std::make_unique<juce::AudioParameterFloat>(PecoParameterID[i],
+                                                               PecoParameterID[i],
+                                                               juce::NormalisableRange<float>(PecoParameterMin[i], PecoParameterMax[i]),
+                                                               PecoParameterDefault[i],
+                                                               PecoParameterID[i]));
+    }
+    
+    params.add(std::make_unique<juce::AudioParameterInt>(PecoParameterID[Delay],
+                                                         PecoParameterID[Delay],
+                                                         MIN_DELAY,
+                                                         MAX_DELAY,
+                                                         ONE_SECOND,
+                                                         PecoParameterID[Delay]));
+    params.add(std::make_unique<juce::AudioParameterInt>(PecoParameterID[DistType],
+                                                         PecoParameterID[DistType],
+                                                         0,
+                                                         1,
+                                                         0,
+                                                         PecoParameterID[DistType]));
+    params.add(std::make_unique<juce::AudioParameterInt>(PecoParameterID[Delay2],
+                                                         PecoParameterID[Delay2],
+                                                         MIN_DELAY,
+                                                         MAX_DELAY,
+                                                         ONE_SECOND,
+                                                         PecoParameterID[Delay2]));
+    params.add(std::make_unique<juce::AudioParameterInt>(PecoParameterID[Delay3],
+                                                         PecoParameterID[Delay3],
+                                                         MIN_DELAY,
+                                                         MAX_DELAY,
+                                                         ONE_SECOND,
+                                                         PecoParameterID[Delay3]));
+    
+    
+    return params;
+}
+
+float PecoAudioProcessor::hard_limit(float input)
+{
+    return std::fminf(std::fmaxf(input, -1), 1);
 }
